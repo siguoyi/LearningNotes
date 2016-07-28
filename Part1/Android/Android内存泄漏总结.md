@@ -4,7 +4,6 @@
 
 我会从 java 内存泄漏的基础知识开始，并通过具体例子来说明 Android 引起内存泄漏的各种原因，以及如何利用工具来分析应用内存泄漏，最后再做总结。
 
-
 ##Java 内存分配策略
 
 Java 程序运行时的内存分配策略有三种,分别是静态分配,栈式分配,和堆式分配，对应的，三种存储策略使用的内存空间主要分别是静态存储区（也称方法区）、栈区和堆区。
@@ -23,20 +22,16 @@ Java 程序运行时的内存分配策略有三种,分别是静态分配,栈式�
 
 举个例子:
 
-```
-public class Sample() {
-    int s1 = 0;
-    Sample mSample1 = new Sample();
-
-    public void method() {
-        int s2 = 1;
-        Sample mSample2 = new Sample();
-    }
-}
-
-Sample mSample3 = new Sample();
-```
-
+    public class Sample() {
+	    int s1 = 0;
+	    Sample mSample1 = new Sample();
+	
+	    public void method() {
+	        int s2 = 1;
+	        Sample mSample2 = new Sample();
+	    }
+	}
+	Sample mSample3 = new Sample();
 Sample 类的局部变量 s2 和引用变量 mSample2 都是存在于栈中，但 mSample2 指向的对象是存在于堆上的。
 mSample3 指向的对象实体存放在堆上，包括这个对象的所有成员变量 s1 和 mSample1，而它自己存在于栈中。
 
@@ -55,9 +50,6 @@ Java的内存管理就是对象的分配和释放问题。在 Java 中，程序�
 监视对象状态是为了更加准确地、及时地释放对象，而释放对象的根本原则就是该对象不再被引用。
 
 为了更好理解 GC 的工作原理，我们可以将对象考虑为有向图的顶点，将引用关系考虑为图的有向边，有向边从引用者指向被引对象。另外，每个线程对象可以作为一个图的起始顶点，例如大多程序从 main 进程开始执行，那么该图就是以 main 进程顶点开始的一棵根树。在这个有向图中，根顶点可达的对象都是有效对象，GC将不回收这些对象。如果某个对象 (连通子图)与这个根顶点不可达(注意，该图为有向图)，那么我们认为这个(这些)对象不再被引用，可以被 GC 回收。
-以下，我们举一个例子说明如何用有向图表示内存管理。对于程序的每一个时刻，我们都有一个有向图表示JVM的内存分配情况。以下右图，就是左边程序运行到第6行的示意图。
-
-![](http://www.ibm.com/developerworks/cn/java/l-JavaMemoryLeak/1.gif)
 
 Java使用有向图的方式进行内存管理，可以消除引用循环的问题，例如有三个对象，相互引用，只要它们和根进程不可达的，那么GC也是可以回收它们的。这种方式的优点是管理内存的精度很高，但是效率较低。另外一种常用的内存管理技术是使用计数器，例如COM模型采用计数器方式管理构件，它与有向图相比，精度行低(很难处理循环引用的问题)，但执行效率很高。
 
@@ -69,23 +61,19 @@ Java使用有向图的方式进行内存管理，可以消除引用循环的问�
 
 通过分析，我们得知，对于C++，程序员需要自己管理边和顶点，而对于Java程序员只需要管理边就可以了(不需要管理顶点的释放)。通过这种方式，Java提高了编程的效率。
 
-![](http://www.ibm.com/developerworks/cn/java/l-JavaMemoryLeak/2.gif)
-
 因此，通过以上分析，我们知道在Java中也有内存泄漏，但范围比C++要小一些。因为Java从语言上保证，任何对象都是可达的，所有的不可达对象都由GC管理。
 
 对于程序员来说，GC基本是透明的，不可见的。虽然，我们只有几个函数可以访问GC，例如运行GC的函数System.gc()，但是根据Java语言规范定义， 该函数不保证JVM的垃圾收集器一定会执行。因为，不同的JVM实现者可能使用不同的算法管理GC。通常，GC的线程的优先级别较低。JVM调用GC的策略也有很多种，有的是内存使用到达一定程度时，GC才开始工作，也有定时执行的，有的是平缓执行GC，有的是中断式执行GC。但通常来说，我们不需要关心这些。除非在一些特定的场合，GC的执行影响应用程序的性能，例如对于基于Web的实时系统，如网络游戏等，用户不希望GC突然中断应用程序执行而进行垃圾回收，那么我们需要调整GC的参数，让GC能够通过平缓的方式释放内存，例如将垃圾回收分解为一系列的小步骤执行，Sun提供的HotSpot JVM就支持这一特性。
 
 同样给出一个 Java 内存泄漏的典型例子，
 
-```
-Vector v = new Vector(10);
-for (int i = 1; i < 100; i++) {
-    Object o = new Object();
-    v.add(o);
-    o = null;   
-}
-```
-
+	Vector v = new Vector(10);
+		for (int i = 1; i < 100; i++) {
+		    Object o = new Object();
+		    v.add(o);
+		    o = null;   
+		｝
+	}
 在这个例子中，我们循环申请Object对象，并将所申请的对象放入一个 Vector 中，如果我们仅仅释放引用本身，那么 Vector 仍然引用该对象，所以这个对象对 GC 来说是不可回收的。因此，如果对象加入到Vector 后，还必须从 Vector 中删除，最简单的方法就是将 Vector 对象设置为 null。
 
 
@@ -107,46 +95,38 @@ Java内存泄漏的根本原因是什么呢？长生命周期的对象持有短�
 
 例如
 
-```
-Static Vector v = new Vector(10);
-for (int i = 1; i<100; i++)
-{
-Object o = new Object();
-v.add(o);
-o = null;
-}
-```
-
+	Static Vector v = new Vector(10);
+		for (int i = 1; i<100; i++){
+			Object o = new Object();
+			v.add(o);
+			o = null;
+		}
+	｝
 在这个例子中，循环申请Object 对象，并将所申请的对象放入一个Vector 中，如果仅仅释放引用本身（o=null），那么Vector 仍然引用该对象，所以这个对象对GC 来说是不可回收的。因此，如果对象加入到Vector 后，还必须从Vector 中删除，最简单的方法就是将Vector对象设置为null。
 
 2、当集合里面的对象属性被修改后，再调用remove()方法时不起作用。
 
 例如：
 
-```
-public static void main(String[] args)
-{
-Set<Person> set = new HashSet<Person>();
-Person p1 = new Person("唐僧","pwd1",25);
-Person p2 = new Person("孙悟空","pwd2",26);
-Person p3 = new Person("猪八戒","pwd3",27);
-set.add(p1);
-set.add(p2);
-set.add(p3);
-System.out.println("总共有:"+set.size()+" 个元素!"); //结果：总共有:3 个元素!
-p3.setAge(2); //修改p3的年龄,此时p3元素对应的hashcode值发生改变
-
-set.remove(p3); //此时remove不掉，造成内存泄漏
-
-set.add(p3); //重新添加，居然添加成功
-System.out.println("总共有:"+set.size()+" 个元素!"); //结果：总共有:4 个元素!
-for (Person person : set)
-{
-System.out.println(person);
-}
-}
-```
-
+    public static void main(String[] args){
+		Set<Person> set = new HashSet<Person>();
+		Person p1 = new Person("唐僧","pwd1",25);
+		Person p2 = new Person("孙悟空","pwd2",26);
+		Person p3 = new Person("猪八戒","pwd3",27);
+		set.add(p1);
+		set.add(p2);
+		set.add(p3);
+		System.out.println("总共有:"+set.size()+" 个元素!"); //结果：总共有:3 个元素!
+		p3.setAge(2); //修改p3的年龄,此时p3元素对应的hashcode值发生改变
+		
+		set.remove(p3); //此时remove不掉，造成内存泄漏
+		
+		set.add(p3); //重新添加，居然添加成功
+		System.out.println("总共有:"+set.size()+" 个元素!"); //结果：总共有:4 个元素!
+		for (Person person : set){
+			System.out.println(person);
+		}
+	}
 3、监听器
 
 在java 编程中，我们都需要和监听器打交道，通常一个应用当中会用到很多监听器，我们会调用一个控件的诸如addXXXListener()等方法来增加监听器，但往往在释放对象的时候却没有记住去删除这些监听器，从而增加了内存泄漏的机会。
@@ -165,29 +145,26 @@ public void registerMsg(Object b);
 
 不正确使用单例模式是引起内存泄漏的一个常见问题，单例对象在初始化后将在JVM的整个生命周期中存在（以静态变量的方式），如果单例对象持有外部的引用，那么这个对象将不能被JVM正常回收，导致内存泄漏，考虑下面的例子：
 
-```
-class A{
-public A(){
-B.getInstance().setA(this);
-}
-....
-}
-//B类采用单例模式
-class B{
-private A a;
-private static B instance=new B();
-public B(){}
-public static B getInstance(){
-return instance;
-}
-public void setA(A a){
-this.a=a;
-}
-//getter...
-} 
-```
+    class A{
+		public A(){
+			B.getInstance().setA(this);
+		}
+		....
+	}
+	//B类采用单例模式
+	class B{
+		private A a;
+		private static B instance = new B();
 
-
+		public B(){}
+		public static B getInstance(){
+			return instance;
+		}
+		public void setA(A a){
+			this.a=a;
+		}
+		//getter...
+	} 
 显然B采用singleton模式，它持有一个A对象的引用，而这个A类的对象将不能被回收。想象下如果A是个比较复杂的对象或者集合类型会发生什么情况
 
 ##Android中常见的内存泄漏汇总
@@ -201,22 +178,20 @@ this.a=a;
 
 由于单例的静态特性使得其生命周期跟应用的生命周期一样长，所以如果使用不恰当的话，很容易造成内存泄漏。比如下面一个典型的例子，
 
-```
-public class AppManager {
-private static AppManager instance;
-private Context context;
-private AppManager(Context context) {
-this.context = context;
-}
-public static AppManager getInstance(Context context) {
-if (instance == null) {
-instance = new AppManager(context);
-}
-return instance;
-}
-}
-```
+    public class AppManager {
+		private static AppManager instance;
+		private Context context;
 
+		private AppManager(Context context) {
+			this.context = context;
+		}
+		public static AppManager getInstance(Context context) {
+			if (instance == null) {
+				instance = new AppManager(context);
+			}
+			return instance;
+		}
+	}
 这是一个普通的单例模式，当创建这个单例的时候，由于需要传入一个Context，所以这个Context的生命周期的长短至关重要：
 
 1、如果此时传入的是 Application 的 Context，因为 Application 的生命周期就是整个应用的生命周期，所以这将没有任何问题。
@@ -225,78 +200,66 @@ return instance;
 
 正确的方式应该改为下面这种方式：
 
-```
-public class AppManager {
-private static AppManager instance;
-private Context context;
-private AppManager(Context context) {
-this.context = context.getApplicationContext();// 使用Application 的context
-}
-public static AppManager getInstance(Context context) {
-if (instance == null) {
-instance = new AppManager(context);
-}
-return instance;
-}
-}
-```
+    public class AppManager {
+		private static AppManager instance;
+		private Context context;
 
-或者这样写，连 Context 都不用传进来了：
-
-```
-在你的 Application 中添加一个静态方法，getContext() 返回 Application 的 context，
-
-...
-
+		private AppManager(Context context) {
+			this.context = context.getApplicationContext();// 使用Application 的context
+		}
+		public static AppManager getInstance(Context context) {
+			if (instance == null) {
+				instance = new AppManager(context);
+			}
+			return instance;
+		}
+	}
+或者这样写，连 Context 都不用传进来了：在你的 Application 中添加一个静态方法，getContext() 返回 Application 的 context，
 context = getApplicationContext();
 
-...
-   /**
-     * 获取全局的context
-     * @return 返回全局context对象
-     */
-    public static Context getContext(){
-        return context;
-    }
+	 /**
+	 * 获取全局的context
+	 * @return 返回全局context对象
+	 */
+	public static Context getContext(){
+	    return context;
+	}
+	
+	public class AppManager {
+		private static AppManager instance;
+		private Context context;
 
-public class AppManager {
-private static AppManager instance;
-private Context context;
-private AppManager() {
-this.context = MyApplication.getContext();// 使用Application 的context
-}
-public static AppManager getInstance() {
-if (instance == null) {
-instance = new AppManager();
-}
-return instance;
-}
-}
-```
-
+		private AppManager() {
+			this.context = MyApplication.getContext();// 使用Application 的context
+		}
+		public static AppManager getInstance() {
+			if (instance == null) {
+				instance = new AppManager();
+			}
+			return instance;
+		}
+	}
 ###匿名内部类/非静态内部类和异步线程
 
 非静态内部类创建静态实例造成的内存泄漏
 
 有的时候我们可能会在启动频繁的Activity中，为了避免重复创建相同的数据资源，可能会出现这种写法：
 
-```
-        public class MainActivity extends AppCompatActivity {
-        private static TestResource mResource = null;
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        if(mManager == null){
-        mManager = new TestResource();
+     public class MainActivity extends AppCompatActivity {
+	        private static TestResource mResource = null;
+		        @Override
+		        protected void onCreate(Bundle savedInstanceState) {
+			        super.onCreate(savedInstanceState);
+			        setContentView(R.layout.activity_main);
+			        if(mManager == null){
+			        	mManager = new TestResource();
+			        }
+			        //...
+			    }
+		    class TestResource {
+		        //...
+	        }
         }
-        //...
-        }
-        class TestResource {
-        //...
-        }
-        }
-```
 这样就在Activity内部创建了一个非静态内部类的单例，每次启动Activity时都会使用该单例的数据，这样虽然避免了资源的重复创建，不过这种写法却会造成内存泄漏，因为非静态内部类默认会持有外部类的引用，而该非静态内部类又创建了一个静态的实例，该实例的生命周期和应用的一样长，这就导致了该静态实例一直会持有该Activity的引用，导致Activity的内存资源不能正常回收。正确的做法为：
 
 将该内部类设为静态内部类或将该内部类抽取出来封装成一个单例，如果需要使用Context，请按照上面推荐的使用Application 的 Context。当然，Application 的 context 不是万能的，所以也不能随便乱用，对于有些地方则必须使用 Activity 的 Context，对于Application，Service，Activity三者的Context的应用场景如下：
@@ -309,20 +272,17 @@ return instance;
 
 android开发经常会继承实现Activity/Fragment/View，此时如果你使用了匿名类，并被异步线程持有了，那要小心了，如果没有任何措施这样一定会导致泄露
 
-```
     public class MainActivity extends Activity {
-    ...
-    Runnable ref1 = new MyRunable();
-    Runnable ref2 = new Runnable() {
-        @Override
-        public void run() {
-
-        }
-    };
-       ...
+	   	 ...
+	    Runnable ref1 = new MyRunable();
+	    Runnable ref2 = new Runnable() {
+	        @Override
+	        public void run() {
+	
+	        }
+	    };
+	    ...
     }
-```
-
 ref1和ref2的区别是，ref2使用了匿名内部类。我们来看看运行时这两个引用的内存：
 
 ![](http://img2.tbcdn.cn/L1/461/1/fb05ff6d2e68f309b94dd84352c81acfe0ae839e?spm=5176.100239.blogcont.10.CtU1c4)
@@ -341,83 +301,77 @@ Handler 的使用造成的内存泄漏问题应该说是最为常见了，很多
 
 举个例子：
 
-```
     public class SampleActivity extends Activity {
 
-    private final Handler mLeakyHandler = new Handler() {
-    @Override
-    public void handleMessage(Message msg) {
-      // ...
+	    private final Handler mLeakyHandler = new Handler() {
+		    @Override
+		    public void handleMessage(Message msg) {
+		      // ...
+		    }
+	    }
+	
+	    @Override
+	    protected void onCreate(Bundle savedInstanceState) {
+		    super.onCreate(savedInstanceState);
+		
+		    // Post a message and delay its execution for 10 minutes.
+		    mLeakyHandler.postDelayed(new Runnable() {
+		      @Override
+		      public void run() { /* ... */ }
+		    }, 1000 * 60 * 10);
+		
+		    // Go back to the previous Activity.
+		    finish();
+	    }
     }
-    }
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-
-    // Post a message and delay its execution for 10 minutes.
-    mLeakyHandler.postDelayed(new Runnable() {
-      @Override
-      public void run() { /* ... */ }
-    }, 1000 * 60 * 10);
-
-    // Go back to the previous Activity.
-    finish();
-    }
-    }
-```
-
 在该 SampleActivity 中声明了一个延迟10分钟执行的消息 Message，mLeakyHandler 将其 push 进了消息队列 MessageQueue 里。当该 Activity 被 finish() 掉时，延迟执行任务的 Message 还会继续存在于主线程中，它持有该 Activity 的 Handler 引用，所以此时 finish() 掉的 Activity 就不会被回收了从而造成内存泄漏（因 Handler 为非静态内部类，它会持有外部类的引用，在这里就是指 SampleActivity）。
 
 修复方法：在 Activity 中避免使用非静态内部类，比如上面我们将 Handler 声明为静态的，则其存活期跟 Activity 的生命周期就无关了。同时通过弱引用的方式引入 Activity，避免直接将 Activity 作为 context 传进去，见下面代码：
 
-```
-public class SampleActivity extends Activity {
-
-  /**
-   * Instances of static inner classes do not hold an implicit
-   * reference to their outer class.
-   */
-  private static class MyHandler extends Handler {
-    private final WeakReference<SampleActivity> mActivity;
-
-    public MyHandler(SampleActivity activity) {
-      mActivity = new WeakReference<SampleActivity>(activity);
-    }
-
-    @Override
-    public void handleMessage(Message msg) {
-      SampleActivity activity = mActivity.get();
-      if (activity != null) {
-        // ...
-      }
-    }
-  }
-
-  private final MyHandler mHandler = new MyHandler(this);
-
-  /**
-   * Instances of anonymous classes do not hold an implicit
-   * reference to their outer class when they are "static".
-   */
-  private static final Runnable sRunnable = new Runnable() {
-      @Override
-      public void run() { /* ... */ }
-  };
-
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-
-    // Post a message and delay its execution for 10 minutes.
-    mHandler.postDelayed(sRunnable, 1000 * 60 * 10);
-
-    // Go back to the previous Activity.
-    finish();
-  }
-}
-```
-
+	public class SampleActivity extends Activity {
+	
+	  /**
+	   * Instances of static inner classes do not hold an implicit
+	   * reference to their outer class.
+	   */
+	  private static class MyHandler extends Handler {
+	    private final WeakReference<SampleActivity> mActivity;
+	
+	    public MyHandler(SampleActivity activity) {
+	      mActivity = new WeakReference<SampleActivity>(activity);
+	    }
+	
+	    @Override
+	    public void handleMessage(Message msg) {
+	      SampleActivity activity = mActivity.get();
+	      if (activity != null) {
+	        // ...
+	      }
+	    }
+	  }
+	
+	  private final MyHandler mHandler = new MyHandler(this);
+	
+	  /**
+	   * Instances of anonymous classes do not hold an implicit
+	   * reference to their outer class when they are "static".
+	   */
+	  private static final Runnable sRunnable = new Runnable() {
+	      @Override
+	      public void run() { /* ... */ }
+	  };
+	
+	  @Override
+	  protected void onCreate(Bundle savedInstanceState) {
+	    super.onCreate(savedInstanceState);
+	
+	    // Post a message and delay its execution for 10 minutes.
+	    mHandler.postDelayed(sRunnable, 1000 * 60 * 10);
+	
+	    // Go back to the previous Activity.
+	    finish();
+	  }
+	}
 综述，即推荐使用静态内部类 + WeakReference 这种方式。每次使用前注意判空。
 
 前面提到了 WeakReference，所以这里就简单的说一下 Java 对象的几种引用类型。
@@ -452,18 +406,15 @@ ok，继续回到主题。前面所说的，创建一个静态Handler内部类�
 
 下面几个方法都可以移除 Message：
 
-```
-public final void removeCallbacks(Runnable r);
+    public final void removeCallbacks(Runnable r);
 
-public final void removeCallbacks(Runnable r, Object token);
-
-public final void removeCallbacksAndMessages(Object token);
-
-public final void removeMessages(int what);
-
-public final void removeMessages(int what, Object object);
-```
-
+	public final void removeCallbacks(Runnable r, Object token);
+	
+	public final void removeCallbacksAndMessages(Object token);
+	
+	public final void removeMessages(int what);
+	
+	public final void removeMessages(int what, Object object);
 ###尽量避免使用 static 成员变量
 
 如果成员变量被声明为 static，那我们都知道其生命周期将与整个app进程生命周期一样。
